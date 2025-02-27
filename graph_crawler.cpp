@@ -1,4 +1,5 @@
 #include <queue>
+
 #include <string>
 #include "rapidjson/document.h"
 #include <iostream>
@@ -23,58 +24,56 @@ size_t WriteCallback(void* contents, size_t size, size_t nmemb, string* output) 
     return totalSize; //return bytes processed
 }
 //fetching neighbors of a given node using libcurl
-vector<string> fetch_neighbors(const string& node){
-    //Pointer to curl handle
-    CURL* curl;
-    //variable to store result of curl operations
-    CURLcode res = curl_easy_perform(curl);
-if (res != CURLE_OK) {
-    std::cerr << "CURL error: " << curl_easy_strerror(res) << std::endl;
-}
-
-    //construct full url by appending node to base URL
-
-    string url = BASE_URL + node;
-    //API's response
-    string response;
-    
-    //initialize the curl session
-    curl = curl_easy_init();
-    if(curl == NULL){
-        cerr <<"Curl Error" <<endl;
-        return{}; //empty vector is returned
+vector<string> fetch_neighbors(const string& node) {
+    // Initialize curl handle
+    CURL* curl = curl_easy_init();
+    if (curl == NULL) {
+        cerr << "Curl initialization failed!" << endl;
+        return {}; // Return empty vector if curl initialization fails
     }
-    //URL for CURL request
+
+    // Construct the full URL
+    string url = BASE_URL + curl_easy_escape(curl, node.c_str(), node.length());
+
+    // API's response
+    string response;
+
+    // Set CURL options
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    //Specify callback function to write recieved data
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-    //provide string to store response data
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-    //Allow request to foll http redirects
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
 
-    //get request
-    curl_easy_perform(curl);
+    // Perform the request
+    CURLcode res = curl_easy_perform(curl);
 
-    //cleanup curl
+    if (res != CURLE_OK) {
+        cerr << "CURL error: " << curl_easy_strerror(res) << endl;
+        curl_easy_cleanup(curl);  // Clean up after request
+        return {};  // Return empty vector on error
+    }
+
+    // Cleanup curl
     curl_easy_cleanup(curl);
 
-    //Parsing JSON response using RAPIDJSON 
+    // Parsing JSON response using RapidJSON
     Document doc;
-    //checking for errors
-    if(doc.Parse(response.c_str()).HasParseError()){
-
-        cerr<<"Failed to parse JSON response"<<endl;
-        return{};
+    if (doc.Parse(response.c_str()).HasParseError()) {
+        cerr << "Failed to parse JSON response" << endl;
+        return {};  // Return empty vector if parsing fails
     }
-    vector<string> neighbors; //storing neighbors 
-    if(doc.HasMember("neighbors")&& doc["neighbors"].IsArray()){
-        for(const auto& neighbor: doc["neighbors"].GetArray()){
+
+    // Process neighbors
+    vector<string> neighbors;
+    if (doc.HasMember("neighbors") && doc["neighbors"].IsArray()) {
+        for (const auto& neighbor : doc["neighbors"].GetArray()) {
             neighbors.push_back(neighbor.GetString());
         }
     }
+
     return neighbors;
 }
+
+
 void bfs_traversal(const string& start_node, int depth){
     //adding time measurement
     auto start_time = chrono::high_resolution_clock::now(); 
